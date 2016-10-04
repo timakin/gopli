@@ -15,7 +15,20 @@ var Commands = []cli.Command{
 		Name:   "sync",
 		Usage:  "",
 		Action: command.CmdSync,
-		Flags:  []cli.Flag{},
+		Flags:  []cli.Flag{
+			cli.StringFlag{
+				Name:  "config, c",
+				Usage: "Load configuration from `FILE`",
+			},
+			cli.StringFlag{
+				Name:  "from, f",
+				Usage: "Target `HOST` for fetching data source",
+			},
+			cli.StringFlag{
+				Name:  "to, t",
+				Usage: "Target `HOST` to apply copied data from other host",
+			},
+		},
 	},
 }
 
