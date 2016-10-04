@@ -1,2 +1,4 @@
 package: github.com/timakin/cylinder
-import: []
+import:
+- package: github.com/codegangsta/cli
+  version: ^1.18.1
