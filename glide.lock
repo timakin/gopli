@@ -1,5 +1,5 @@
-hash: e4c3721a30c8cf5dea50bfbb4efc7cfe63114d272467d2e91ac97c01d66539c3
-updated: 2016-10-05T01:32:11.316783959+09:00
+hash: 8bbeab83c9ef749a702cc773f4bddb43d599bb06bd91b9b992a3955a4318d4ae
+updated: 2016-10-05T02:03:38.255790815+09:00
 imports:
 - name: github.com/BurntSushi/toml
   version: bbd5bb678321a0d6e58f1099321dfa73391c1b6f
@@ -11,6 +11,10 @@ imports:
   version: 6c903ff4aa50920ca86087a280590b36b3152b9c
 - name: github.com/mattn/go-isatty
   version: 66b8e73f3f5cda9f96b69efd03dd3d7fc4a5cdb8
+- name: golang.org/x/crypto
+  version: 2cbd8ea802d1adf67a6ef1df6b9ade342c37241d
+  subpackages:
+  - ssh
 - name: golang.org/x/sys
   version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:

@@ -6,3 +6,6 @@ import:
   version: ^0.2.0
 - package: github.com/k0kubun/pp
   version: ^2.2.0
+- package: golang.org/x/crypto
+  subpackages:
+  - ssh
