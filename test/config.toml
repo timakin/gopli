@@ -1,10 +1,3 @@
-Cylinder
-========
-Database backup between remote hosts (or local) written in Golang.
-
-## Usage
-Write down setting file in toml.
-```
 [database]
   [database.remotehost1]
   host = "xxx.xxx.xxx.xxx"
@@ -24,12 +17,7 @@ Write down setting file in toml.
 
 [ssh]
   [ssh.remotehost1]
-  ssh_key = "~/.ssh/id_rsa"
+  key = "~/.ssh/id_rsa"
 
   [ssh.remotehost2]
-  ssh_key = "~/.ssh/id_rsa"
-```
-
-```
-cylinder sync remotehost1 remotehost2 -c config/cylinder.toml
-```
+  key = "~/.ssh/id_rsa"
