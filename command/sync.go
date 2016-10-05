@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bufio"
 	"bytes"
 	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/cli"
@@ -57,7 +58,6 @@ func CmdSync(c *cli.Context) {
 	usr, _ := user.Current()
 	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
-	pp.Print(keypath)
 	key, err := ioutil.ReadFile(keypath)
 	if err != nil {
 		log.Fatalf("unable to read private key: %v", err)
@@ -91,7 +91,6 @@ func CmdSync(c *cli.Context) {
 	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
 
 	err = session.Run(listTableCmd)
-	pp.Print(listTableStdoutBuf.String())
 
 	loadDirName := "/tmp/db_sync_" + syncTimestamp
 	pp.Print(loadDirName)
@@ -102,4 +101,25 @@ func CmdSync(c *cli.Context) {
 	listTableResultFile := loadDirName + "/table_list.txt"
 	pp.Print(listTableResultFile)
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
+
+	var tables []string
+	if tables, err = readLines(listTableResultFile); err != nil {
+		pp.Fatal(err)
+	}
+	pp.Print(tables)
+}
+
+func readLines(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
 }
