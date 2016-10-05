@@ -119,7 +119,20 @@ func readLines(path string) ([]string, error) {
 	var lines []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		if isInBlackList(scanner.Text()) {
+			continue
+		}
 		lines = append(lines, scanner.Text())
 	}
 	return lines, scanner.Err()
+}
+
+func isInBlackList(table string) bool {
+	tableBlackList := []string{"schema_migrations", "repli_chk", "repli_clock"}
+	for _, blackListElem := range tableBlackList {
+		if blackListElem == table {
+			return true
+		}
+	}
+	return false
 }
