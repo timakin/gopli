@@ -1,16 +1,19 @@
 package command
 
 import (
+	"bytes"
 	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/cli"
 	"github.com/k0kubun/pp"
 	"golang.org/x/crypto/ssh"
-	"bytes"
 	"io/ioutil"
-	"os/user"
-	"strings"
-	"path/filepath"
 	"log"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type tomlConfig struct {
@@ -18,6 +21,7 @@ type tomlConfig struct {
 	SSH      map[string]SSH
 }
 
+// Database settings
 type Database struct {
 	Host             string
 	Port             int
@@ -27,6 +31,7 @@ type Database struct {
 	Password         string
 }
 
+// SSH settings
 type SSH struct {
 	Host string
 	Port string
@@ -34,6 +39,7 @@ type SSH struct {
 	Key  string
 }
 
+// CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
 	var tmlconf tomlConfig
 	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
@@ -46,8 +52,10 @@ func CmdSync(c *cli.Context) {
 	fromSSHConf := tmlconf.SSH[c.String("from")]
 	// toSSHConf := tmlconf.SSH[c.String("to")]
 
+	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
 	usr, _ := user.Current()
-	keypathString := strings.Replace(fromSSHConf.Key,  "~", usr.HomeDir, 1)
+	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
 	pp.Print(keypath)
 	key, err := ioutil.ReadFile(keypath)
@@ -66,7 +74,7 @@ func CmdSync(c *cli.Context) {
 			ssh.PublicKeys(signer),
 		},
 	}
-	conn, err := ssh.Dial("tcp", fromSSHConf.Host + ":" + fromSSHConf.Port, config)
+	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
 	}
@@ -78,10 +86,20 @@ func CmdSync(c *cli.Context) {
 	}
 	defer session.Close()
 
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
+	var listTableStdoutBuf bytes.Buffer
+	session.Stdout = &listTableStdoutBuf
 	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
 
 	err = session.Run(listTableCmd)
-	pp.Print(stdoutBuf.String())
+	pp.Print(listTableStdoutBuf.String())
+
+	loadDirName := "/tmp/db_sync_" + syncTimestamp
+	pp.Print(loadDirName)
+	if err := os.MkdirAll(loadDirName, 0777); err != nil {
+		pp.Fatal(err)
+	}
+
+	listTableResultFile := loadDirName + "/table_list.txt"
+	pp.Print(listTableResultFile)
+	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
 }
