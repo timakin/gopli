@@ -5,6 +5,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/k0kubun/pp"
 	"golang.org/x/crypto/ssh"
+	"bytes"
 	"io/ioutil"
 	"os/user"
 	"strings"
@@ -34,16 +35,16 @@ type SSH struct {
 }
 
 func CmdSync(c *cli.Context) {
-	pp.Print(c.String("config"))
 	var tmlconf tomlConfig
 	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
 		// TODO: pkg/errors
 		pp.Print(err)
 	}
-	pp.Print(tmlconf)
 
+	// fromDBConf := tmlconf.Database[c.String("from")]
+	// toDBConf := tmlconf.Database[c.String("to")]
 	fromSSHConf := tmlconf.SSH[c.String("from")]
-	toSSHConf := tmlconf.SSH[c.String("to")]
+	// toSSHConf := tmlconf.SSH[c.String("to")]
 
 	usr, _ := user.Current()
 	keypathString := strings.Replace(fromSSHConf.Key,  "~", usr.HomeDir, 1)
@@ -60,7 +61,7 @@ func CmdSync(c *cli.Context) {
 	}
 
 	config := &ssh.ClientConfig{
-		User: "user",
+		User: fromSSHConf.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -77,5 +78,8 @@ func CmdSync(c *cli.Context) {
 	}
 	defer session.Close()
 
-	err = session.Run("ls -l $LC_USR_DIR")
+	var stdoutBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	err = session.Run("ls -l")
+	pp.Print(stdoutBuf.String())
 }
