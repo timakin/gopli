@@ -41,7 +41,7 @@ func CmdSync(c *cli.Context) {
 		pp.Print(err)
 	}
 
-	// fromDBConf := tmlconf.Database[c.String("from")]
+	fromDBConf := tmlconf.Database[c.String("from")]
 	// toDBConf := tmlconf.Database[c.String("to")]
 	fromSSHConf := tmlconf.SSH[c.String("from")]
 	// toSSHConf := tmlconf.SSH[c.String("to")]
@@ -80,6 +80,8 @@ func CmdSync(c *cli.Context) {
 
 	var stdoutBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
-	err = session.Run("ls -l")
+	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
+
+	err = session.Run(listTableCmd)
 	pp.Print(stdoutBuf.String())
 }
