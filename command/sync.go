@@ -17,6 +17,9 @@ import (
 	"time"
 )
 
+var fromDBConf Database
+var fromSSHConf SSH
+
 type tomlConfig struct {
 	Database map[string]Database
 	SSH      map[string]SSH
@@ -48,9 +51,9 @@ func CmdSync(c *cli.Context) {
 		pp.Print(err)
 	}
 
-	fromDBConf := tmlconf.Database[c.String("from")]
+	fromDBConf = tmlconf.Database[c.String("from")]
 	// toDBConf := tmlconf.Database[c.String("to")]
-	fromSSHConf := tmlconf.SSH[c.String("from")]
+	fromSSHConf = tmlconf.SSH[c.String("from")]
 	// toSSHConf := tmlconf.SSH[c.String("to")]
 
 	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
