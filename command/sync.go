@@ -28,6 +28,7 @@ type Database struct {
 
 type SSH struct {
 	Host string
+	Port string
 	User string
 	Key  string
 }
@@ -41,9 +42,11 @@ func CmdSync(c *cli.Context) {
 	}
 	pp.Print(tmlconf)
 
+	fromSSHConf := tmlconf.SSH[c.String("from")]
+	toSSHConf := tmlconf.SSH[c.String("to")]
+
 	usr, _ := user.Current()
-	// usr.HomeDir = ホームディレクトリ
-	keypathString := strings.Replace(tmlconf.SSH[c.String("from")].Key,  "~", usr.HomeDir, 1)
+	keypathString := strings.Replace(fromSSHConf.Key,  "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
 	pp.Print(keypath)
 	key, err := ioutil.ReadFile(keypath)
@@ -51,7 +54,6 @@ func CmdSync(c *cli.Context) {
 		log.Fatalf("unable to read private key: %v", err)
 	}
 
-	// Create the Signer for this private key.
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
 		log.Fatalf("unable to parse private key: %v", err)
@@ -60,11 +62,10 @@ func CmdSync(c *cli.Context) {
 	config := &ssh.ClientConfig{
 		User: "user",
 		Auth: []ssh.AuthMethod{
-			// Use the PublicKeys method for remote authentication.
 			ssh.PublicKeys(signer),
 		},
 	}
-	conn, err := ssh.Dial("tcp", tmlconf.SSH[c.String("from")].Host, config)
+	conn, err := ssh.Dial("tcp", fromSSHConf.Host + ":" + fromSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
 	}
@@ -75,4 +76,6 @@ func CmdSync(c *cli.Context) {
 		panic("Failed to create session: " + err.Error())
 	}
 	defer session.Close()
+
+	err = session.Run("ls -l $LC_USR_DIR")
 }
