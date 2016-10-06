@@ -113,9 +113,9 @@ func CmdSync(c *cli.Context) {
 	}
 	pp.Print(tables)
 
-	max_procs := os.Getenv("GOMAXPROCS")
+	maxProcs := os.Getenv("GOMAXPROCS")
 
-	if max_procs == "" {
+	if maxProcs == "" {
 		cpus := runtime.NumCPU()
 		runtime.GOMAXPROCS(cpus)
 	}
