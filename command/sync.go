@@ -101,7 +101,7 @@ func CmdSync(c *cli.Context) {
 		pp.Fatal(err)
 	}
 
-	listTableResultFile := loadDirName + "/table_list.txt"
+	listTableResultFile := loadDirName + "/" + fromDBConf.Name + "_list.txt"
 	pp.Print(listTableResultFile)
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
 
@@ -110,6 +110,28 @@ func CmdSync(c *cli.Context) {
 		pp.Fatal(err)
 	}
 	pp.Print(tables)
+
+	for _, table := range tables {
+		table := table
+
+		session, err := conn.NewSession()
+		if err != nil {
+			panic("Failed to create session: " + err.Error())
+		}
+		defer session.Close()
+
+		var fetchTableStdoutBuf bytes.Buffer
+		session.Stdout = &fetchTableStdoutBuf
+		fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
+		pp.Print(fetchRowsCmd)
+		err = session.Run(fetchRowsCmd)
+		if err != nil {
+			pp.Fatal(err)
+		}
+		fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+		ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
+		pp.Print(fetchTableStdoutBuf.String())
+	}
 }
 
 func readLines(path string) ([]string, error) {
