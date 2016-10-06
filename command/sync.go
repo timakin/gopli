@@ -119,10 +119,11 @@ func CmdSync(c *cli.Context) {
 		runtime.GOMAXPROCS(cpus)
 	}
 
+	tasks := genWorkers(3)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
-		go func(table string) {
+		tasks <- func(table string) {
 			defer wg.Done()
 			session, err := conn.NewSession()
 			if err != nil {
@@ -141,9 +142,21 @@ func CmdSync(c *cli.Context) {
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
 			pp.Print(fetchRowsCmd + " was done.\n")
-		}(table)
+		}
 	}
 	wg.Wait()
+}
+
+func genWorkers(num int) chan<- func() {
+	tasks := make(chan func(string))
+	for i := 0; i < num; i++ {
+		go func() {
+			for f := range tasks {
+				f()
+			}
+		}()
+	}
+	return tasks
 }
 
 func readLines(path string) ([]string, error) {
