@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,11 +120,12 @@ func CmdSync(c *cli.Context) {
 		runtime.GOMAXPROCS(cpus)
 	}
 
-	tasks := genWorkers(3)
+	limit := make(chan int, 3)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
-		tasks <- func(table string) {
+		go func(table string) {
+			limit <- 1
 			defer wg.Done()
 			session, err := conn.NewSession()
 			if err != nil {
@@ -142,21 +144,10 @@ func CmdSync(c *cli.Context) {
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
 			pp.Print(fetchRowsCmd + " was done.\n")
-		}
+			<-limit
+		}(table)
 	}
 	wg.Wait()
-}
-
-func genWorkers(num int) chan<- func() {
-	tasks := make(chan func(string))
-	for i := 0; i < num; i++ {
-		go func() {
-			for f := range tasks {
-				f()
-			}
-		}()
-	}
-	return tasks
 }
 
 func readLines(path string) ([]string, error) {
