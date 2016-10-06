@@ -45,6 +45,9 @@ type SSH struct {
 	Key  string
 }
 
+var listTableResultFile string
+var loadDirName string
+
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
 	loadTomlConf(c)
@@ -56,27 +59,7 @@ func CmdSync(c *cli.Context) {
 	}
 	defer conn.Close()
 
-	session, err := conn.NewSession()
-	if err != nil {
-		panic("Failed to create session: " + err.Error())
-	}
-	defer session.Close()
-
-	var listTableStdoutBuf bytes.Buffer
-	session.Stdout = &listTableStdoutBuf
-	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
-	err = session.Run(listTableCmd)
-
-	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	loadDirName := "/tmp/db_sync_" + syncTimestamp
-	pp.Print(loadDirName)
-	if err := os.MkdirAll(loadDirName, 0777); err != nil {
-		pp.Fatal(err)
-	}
-
-	listTableResultFile := loadDirName + "/" + fromDBConf.Name + "_list.txt"
-	pp.Print(listTableResultFile)
-	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
+	fetchTableList(conn)
 
 	var tables []string
 	if tables, err = readLines(listTableResultFile); err != nil {
@@ -183,4 +166,28 @@ func loadSSHConf() *ssh.ClientConfig {
 		},
 	}
 	return config
+}
+
+func fetchTableList(conn *ssh.Client) {
+	session, err := conn.NewSession()
+	if err != nil {
+		panic("Failed to create session: " + err.Error())
+	}
+	defer session.Close()
+
+	var listTableStdoutBuf bytes.Buffer
+	session.Stdout = &listTableStdoutBuf
+	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
+	err = session.Run(listTableCmd)
+
+	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	loadDirName = "/tmp/db_sync_" + syncTimestamp
+	pp.Print(loadDirName)
+	if err := os.MkdirAll(loadDirName, 0777); err != nil {
+		pp.Fatal(err)
+	}
+
+	listTableResultFile = loadDirName + "/" + fromDBConf.Name + "_list.txt"
+	pp.Print(listTableResultFile)
+	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
 }
