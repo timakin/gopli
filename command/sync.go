@@ -60,48 +60,7 @@ func CmdSync(c *cli.Context) {
 	defer conn.Close()
 
 	fetchTableList(conn)
-
-	var tables []string
-	if tables, err = readLines(listTableResultFile); err != nil {
-		pp.Fatal(err)
-	}
-	pp.Print(tables)
-
-	maxProcs := os.Getenv("GOMAXPROCS")
-
-	if maxProcs == "" {
-		cpus := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpus)
-	}
-
-	limit := make(chan int, 3)
-	var wg sync.WaitGroup
-	for _, table := range tables {
-		wg.Add(1)
-		go func(table string) {
-			limit <- 1
-			defer wg.Done()
-			session, err := conn.NewSession()
-			if err != nil {
-				panic("Failed to create session: " + err.Error())
-			}
-			defer session.Close()
-
-			var fetchTableStdoutBuf bytes.Buffer
-			session.Stdout = &fetchTableStdoutBuf
-			fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
-
-			err = session.Run(fetchRowsCmd)
-			if err != nil {
-				pp.Fatal(err)
-			}
-			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
-			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
-			pp.Print(fetchRowsCmd + " was done.\n")
-			<-limit
-		}(table)
-	}
-	wg.Wait()
+	fetchTables(conn)
 }
 
 func readLines(path string) ([]string, error) {
@@ -190,4 +149,49 @@ func fetchTableList(conn *ssh.Client) {
 	listTableResultFile = loadDirName + "/" + fromDBConf.Name + "_list.txt"
 	pp.Print(listTableResultFile)
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
+}
+
+func fetchTables(conn *ssh.Client) {
+	var tables []string
+	tables, err := readLines(listTableResultFile)
+	if err != nil {
+		pp.Fatal(err)
+	}
+	pp.Print(tables)
+
+	maxProcs := os.Getenv("GOMAXPROCS")
+
+	if maxProcs == "" {
+		cpus := runtime.NumCPU()
+		runtime.GOMAXPROCS(cpus)
+	}
+
+	limit := make(chan int, 3)
+	var wg sync.WaitGroup
+	for _, table := range tables {
+		wg.Add(1)
+		go func(table string) {
+			limit <- 1
+			defer wg.Done()
+			session, err := conn.NewSession()
+			if err != nil {
+				panic("Failed to create session: " + err.Error())
+			}
+			defer session.Close()
+
+			var fetchTableStdoutBuf bytes.Buffer
+			session.Stdout = &fetchTableStdoutBuf
+			fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
+
+			err = session.Run(fetchRowsCmd)
+			if err != nil {
+				pp.Fatal(err)
+			}
+			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
+			pp.Print(fetchRowsCmd + " was done.\n")
+			<-limit
+		}(table)
+	}
+	wg.Wait()
 }
