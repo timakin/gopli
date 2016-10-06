@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -111,27 +112,38 @@ func CmdSync(c *cli.Context) {
 	}
 	pp.Print(tables)
 
-	for _, table := range tables {
-		table := table
+	max_procs := os.Getenv("GOMAXPROCS")
 
-		session, err := conn.NewSession()
-		if err != nil {
-			panic("Failed to create session: " + err.Error())
-		}
-		defer session.Close()
-
-		var fetchTableStdoutBuf bytes.Buffer
-		session.Stdout = &fetchTableStdoutBuf
-		fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
-		pp.Print(fetchRowsCmd)
-		err = session.Run(fetchRowsCmd)
-		if err != nil {
-			pp.Fatal(err)
-		}
-		fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
-		ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
-		pp.Print(fetchTableStdoutBuf.String())
+	if max_procs == "" {
+		cpus := runtime.NumCPU()
+		runtime.GOMAXPROCS(cpus)
 	}
+
+	var wg sync.WaitGroup
+	for _, table := range tables {
+		wg.Add(1)
+		go func(table string) {
+			defer wg.Done()
+			session, err := conn.NewSession()
+			if err != nil {
+				panic("Failed to create session: " + err.Error())
+			}
+			defer session.Close()
+
+			var fetchTableStdoutBuf bytes.Buffer
+			session.Stdout = &fetchTableStdoutBuf
+			fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
+
+			err = session.Run(fetchRowsCmd)
+			if err != nil {
+				pp.Fatal(err)
+			}
+			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
+			pp.Print(fetchRowsCmd + " was done.\n")
+		}(table)
+	}
+	wg.Wait()
 }
 
 func readLines(path string) ([]string, error) {
