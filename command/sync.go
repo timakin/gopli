@@ -47,38 +47,9 @@ type SSH struct {
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
-	var tmlconf tomlConfig
-	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
-		// TODO: pkg/errors
-		pp.Print(err)
-	}
+	loadTomlConf(c)
 
-	fromDBConf = tmlconf.Database[c.String("from")]
-	// toDBConf := tmlconf.Database[c.String("to")]
-	fromSSHConf = tmlconf.SSH[c.String("from")]
-	// toSSHConf := tmlconf.SSH[c.String("to")]
-
-	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
-
-	usr, _ := user.Current()
-	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
-	keypath, _ := filepath.Abs(keypathString)
-	key, err := ioutil.ReadFile(keypath)
-	if err != nil {
-		log.Fatalf("unable to read private key: %v", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		log.Fatalf("unable to parse private key: %v", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User: fromSSHConf.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-	}
+	config := loadSSHConf()
 	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
@@ -94,9 +65,9 @@ func CmdSync(c *cli.Context) {
 	var listTableStdoutBuf bytes.Buffer
 	session.Stdout = &listTableStdoutBuf
 	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
-
 	err = session.Run(listTableCmd)
 
+	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	loadDirName := "/tmp/db_sync_" + syncTimestamp
 	pp.Print(loadDirName)
 	if err := os.MkdirAll(loadDirName, 0777); err != nil {
@@ -176,4 +147,40 @@ func isInBlackList(table string) bool {
 		}
 	}
 	return false
+}
+
+func loadTomlConf(c *cli.Context) {
+	var tmlconf tomlConfig
+	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
+		// TODO: pkg/errors
+		pp.Print(err)
+	}
+
+	fromDBConf = tmlconf.Database[c.String("from")]
+	// toDBConf := tmlconf.Database[c.String("to")]
+	fromSSHConf = tmlconf.SSH[c.String("from")]
+	// toSSHConf := tmlconf.SSH[c.String("to")]
+}
+
+func loadSSHConf() *ssh.ClientConfig {
+	usr, _ := user.Current()
+	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
+	keypath, _ := filepath.Abs(keypathString)
+	key, err := ioutil.ReadFile(keypath)
+	if err != nil {
+		log.Fatalf("unable to read private key: %v", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		log.Fatalf("unable to parse private key: %v", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: fromSSHConf.User,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+	}
+	return config
 }
