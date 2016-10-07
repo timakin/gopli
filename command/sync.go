@@ -49,10 +49,12 @@ type SSH struct {
 var listTableResultFile string
 var loadDirName string
 var fromHostConn *ssh.Client
+var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
 	SelectTablesSQL = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
 	ShowTableSQL    = "mysql %s -u%s -p%s -B -N -e 'show tables'"
+	MaxSession      = 3
 )
 
 // CmdSync supports `sync` command in CLI
@@ -83,7 +85,6 @@ func readLines(path string) ([]string, error) {
 }
 
 func isInBlackList(table string) bool {
-	tableBlackList := []string{"schema_migrations", "repli_chk", "repli_clock"}
 	for _, blackListElem := range tableBlackList {
 		if blackListElem == table {
 			return true
@@ -176,7 +177,7 @@ func fetchTables(conn *ssh.Client) {
 		runtime.GOMAXPROCS(cpus)
 	}
 
-	sem := make(chan int, 3)
+	sem := make(chan int, MaxSession)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
