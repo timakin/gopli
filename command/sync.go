@@ -3,6 +3,7 @@ package command
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/cli"
 	"github.com/k0kubun/pp"
@@ -48,6 +49,10 @@ type SSH struct {
 var listTableResultFile string
 var loadDirName string
 var fromHostConn *ssh.Client
+
+const (
+	SelectTablesSQL = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+)
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
@@ -185,7 +190,7 @@ func fetchTables(conn *ssh.Client) {
 
 			var fetchTableStdoutBuf bytes.Buffer
 			session.Stdout = &fetchTableStdoutBuf
-			fetchRowsCmd := "mysql -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'SELECT * FROM " + fromDBConf.Name + "." + table + "'"
+			fetchRowsCmd := fmt.Sprintf(SelectTablesSQL, fromDBConf.User, fromDBConf.Password, fromDBConf.Name, table)
 
 			err = session.Run(fetchRowsCmd)
 			if err != nil {
