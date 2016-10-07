@@ -72,6 +72,7 @@ func CmdSync(c *cli.Context) {
 	connectToFromHost()
 	defer fromHostConn.Close()
 	fetchTableList(fromHostConn)
+	defer deleteTmpDir()
 	fetchTables(fromHostConn)
 	connectToToHost()
 	defer toHostConn.Close()
@@ -295,4 +296,11 @@ func deleteTables(conn *ssh.Client) {
 
 func isnil(x interface{}) bool {
 	return ((x == nil) || reflect.ValueOf(x).IsNil())
+}
+
+func deleteTmpDir() {
+	err := os.RemoveAll(loadDirName)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
