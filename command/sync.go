@@ -47,20 +47,15 @@ type SSH struct {
 
 var listTableResultFile string
 var loadDirName string
+var fromHostConn *ssh.Client
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
 	loadTomlConf(c)
-
-	config := loadSSHConf()
-	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
-	if err != nil {
-		panic("Failed to dial: " + err.Error())
-	}
-	defer conn.Close()
-
-	fetchTableList(conn)
-	fetchTables(conn)
+	connectToFromHost()
+	defer fromHostConn.Close()
+	fetchTableList(fromHostConn)
+	fetchTables(fromHostConn)
 }
 
 func readLines(path string) ([]string, error) {
@@ -125,6 +120,15 @@ func loadSSHConf() *ssh.ClientConfig {
 		},
 	}
 	return config
+}
+
+func connectToFromHost() {
+	config := loadSSHConf()
+	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
+	if err != nil {
+		panic("Failed to dial: " + err.Error())
+	}
+	fromHostConn = conn
 }
 
 func fetchTableList(conn *ssh.Client) {
