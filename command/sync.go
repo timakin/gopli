@@ -176,12 +176,12 @@ func fetchTables(conn *ssh.Client) {
 		runtime.GOMAXPROCS(cpus)
 	}
 
-	limit := make(chan int, 3)
+	sem := make(chan int, 3)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
 		go func(table string) {
-			limit <- 1
+			sem <- 1
 			defer wg.Done()
 			session, err := conn.NewSession()
 			if err != nil {
@@ -200,7 +200,7 @@ func fetchTables(conn *ssh.Client) {
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
 			pp.Print(fetchRowsCmd + " was done.\n")
-			<-limit
+			<-sem
 		}(table)
 	}
 	wg.Wait()
