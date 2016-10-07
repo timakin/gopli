@@ -183,6 +183,7 @@ func fetchTables(conn *ssh.Client) {
 		go func(table string) {
 			sem <- 1
 			defer wg.Done()
+			defer func() { <-sem }()
 			session, err := conn.NewSession()
 			if err != nil {
 				panic("Failed to create session: " + err.Error())
@@ -200,7 +201,6 @@ func fetchTables(conn *ssh.Client) {
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
 			pp.Print(fetchRowsCmd + " was done.\n")
-			<-sem
 		}(table)
 	}
 	wg.Wait()
