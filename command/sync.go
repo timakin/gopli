@@ -52,6 +52,7 @@ var fromHostConn *ssh.Client
 
 const (
 	SelectTablesSQL = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+	ShowTableSQL    = "mysql %s -u%s -p%s -B -N -e 'show tables'"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -145,7 +146,7 @@ func fetchTableList(conn *ssh.Client) {
 
 	var listTableStdoutBuf bytes.Buffer
 	session.Stdout = &listTableStdoutBuf
-	listTableCmd := "mysql " + fromDBConf.Name + " -u" + fromDBConf.User + " -p" + fromDBConf.Password + " -B -N -e 'show tables'"
+	listTableCmd := fmt.Sprintf(ShowTableSQL, fromDBConf.Name, fromDBConf.User, fromDBConf.Password)
 	err = session.Run(listTableCmd)
 
 	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
