@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,6 +23,8 @@ import (
 
 var fromDBConf Database
 var fromSSHConf SSH
+var toDBConf Database
+var toSSHConf SSH
 
 type tomlConfig struct {
 	Database map[string]Database
@@ -36,6 +39,7 @@ type Database struct {
 	Name             string
 	User             string
 	Password         string
+	Offset           int
 }
 
 // SSH settings
@@ -49,21 +53,39 @@ type SSH struct {
 var listTableResultFile string
 var loadDirName string
 var fromHostConn *ssh.Client
+var toHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	SelectTablesSQL = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
-	ShowTableSQL    = "mysql %s -u%s -p%s -B -N -e 'show tables'"
-	MaxSession      = 3
+	SelectTablesSQL  = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+	ShowTableSQL     = "mysql %s -u%s -p%s -B -N -e 'show tables'"
+	MaxFetchSession  = 3
+	MaxDeleteSession = 3
+	DefaultOffset    = 1000000000
+	DeleteTableSQL   = "mysql -u%s -p%s -e 'delete from %s where id < %d'"
 )
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
+	setupMultiCore()
 	loadTomlConf(c)
 	connectToFromHost()
 	defer fromHostConn.Close()
 	fetchTableList(fromHostConn)
 	fetchTables(fromHostConn)
+	connectToToHost()
+	defer toHostConn.Close()
+	deleteTables(toHostConn)
+	// deleteDir
+}
+
+func setupMultiCore() {
+	maxProcs := os.Getenv("GOMAXPROCS")
+
+	if maxProcs == "" {
+		cpus := runtime.NumCPU()
+		runtime.GOMAXPROCS(cpus)
+	}
 }
 
 func readLines(path string) ([]string, error) {
@@ -101,12 +123,12 @@ func loadTomlConf(c *cli.Context) {
 	}
 
 	fromDBConf = tmlconf.Database[c.String("from")]
-	// toDBConf := tmlconf.Database[c.String("to")]
+	toDBConf = tmlconf.Database[c.String("to")]
 	fromSSHConf = tmlconf.SSH[c.String("from")]
-	// toSSHConf := tmlconf.SSH[c.String("to")]
+	toSSHConf = tmlconf.SSH[c.String("to")]
 }
 
-func loadSSHConf() *ssh.ClientConfig {
+func loadFromSSHConf() *ssh.ClientConfig {
 	usr, _ := user.Current()
 	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
@@ -130,7 +152,7 @@ func loadSSHConf() *ssh.ClientConfig {
 }
 
 func connectToFromHost() {
-	config := loadSSHConf()
+	config := loadFromSSHConf()
 	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
@@ -170,14 +192,7 @@ func fetchTables(conn *ssh.Client) {
 	}
 	pp.Print(tables)
 
-	maxProcs := os.Getenv("GOMAXPROCS")
-
-	if maxProcs == "" {
-		cpus := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpus)
-	}
-
-	sem := make(chan int, MaxSession)
+	sem := make(chan int, MaxFetchSession)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
@@ -205,4 +220,79 @@ func fetchTables(conn *ssh.Client) {
 		}(table)
 	}
 	wg.Wait()
+}
+
+func loadToSSHConf() *ssh.ClientConfig {
+	usr, _ := user.Current()
+	keypathString := strings.Replace(toSSHConf.Key, "~", usr.HomeDir, 1)
+	keypath, _ := filepath.Abs(keypathString)
+	key, err := ioutil.ReadFile(keypath)
+	if err != nil {
+		log.Fatalf("unable to read private key: %v", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		log.Fatalf("unable to parse private key: %v", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: toSSHConf.User,
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+	}
+	return config
+}
+
+func connectToToHost() {
+	config := loadToSSHConf()
+	conn, err := ssh.Dial("tcp", toSSHConf.Host+":"+toSSHConf.Port, config)
+	if err != nil {
+		panic("Failed to dial: " + err.Error())
+	}
+	toHostConn = conn
+}
+
+func deleteTables(conn *ssh.Client) {
+	var tables []string
+	tables, err := readLines(listTableResultFile)
+	if err != nil {
+		pp.Fatal(err)
+	}
+	pp.Print(tables)
+
+	sem := make(chan int, 10)
+	var wg sync.WaitGroup
+	for _, table := range tables {
+		wg.Add(1)
+		go func(table string) {
+			sem <- 1
+			defer wg.Done()
+			defer func() { <-sem }()
+			session, err := conn.NewSession()
+			if err != nil {
+				panic("Failed to create session: " + err.Error())
+			}
+			defer session.Close()
+
+			var offset int
+			if isnil(toDBConf.Offset) {
+				offset = DefaultOffset
+			} else {
+				offset = toDBConf.Offset
+			}
+
+			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, fromDBConf.User, fromDBConf.Password, fromDBConf.Name, table, offset)
+			err = session.Run(deleteTableCmd)
+			if err != nil {
+				pp.Fatal(err)
+			}
+		}(table)
+	}
+	wg.Wait()
+}
+
+func isnil(x interface{}) bool {
+	return ((x == nil) || reflect.ValueOf(x).IsNil())
 }
