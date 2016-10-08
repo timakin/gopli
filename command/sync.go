@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -62,7 +61,7 @@ const (
 	MaxFetchSession  = 3
 	MaxDeleteSession = 3
 	DefaultOffset    = 1000000000
-	DeleteTableSQL   = "mysql -u%s -p%s -e 'delete from %s where id < %d'"
+	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s WHERE id < %d'"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -263,7 +262,7 @@ func deleteTables(conn *ssh.Client) {
 	}
 	pp.Print(tables)
 
-	sem := make(chan int, 10)
+	sem := make(chan int, 3)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
@@ -284,7 +283,12 @@ func deleteTables(conn *ssh.Client) {
 				offset = toDBConf.Offset
 			}
 
-			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, fromDBConf.User, fromDBConf.Password, fromDBConf.Name, table, offset)
+			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table, offset)
+			pp.Print(table + "\n")
+
+			var deleteTableStdoutBuf bytes.Buffer
+			session.Stdout = &deleteTableStdoutBuf
+			pp.Print(deleteTableCmd + "\n")
 			err = session.Run(deleteTableCmd)
 			if err != nil {
 				pp.Fatal(err)
@@ -295,7 +299,7 @@ func deleteTables(conn *ssh.Client) {
 }
 
 func isnil(x interface{}) bool {
-	return ((x == nil) || reflect.ValueOf(x).IsNil())
+	return x == nil || x == 0
 }
 
 func deleteTmpDir() {
