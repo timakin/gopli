@@ -62,6 +62,7 @@ const (
 	MaxDeleteSession = 3
 	DefaultOffset    = 1000000000
 	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
+	LoadInfileSQL    = "mysql -u%s -p%s -B -N -e 'LOAD DATA LOCAL INFILE %s INTO TABLE %s.%s'"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -76,7 +77,7 @@ func CmdSync(c *cli.Context) {
 	connectToToHost()
 	defer toHostConn.Close()
 	deleteTables(toHostConn)
-	// deleteDir
+	loadInfile(toHostConn)
 }
 
 func setupMultiCore() {
@@ -283,6 +284,41 @@ func deleteTables(conn *ssh.Client) {
 			session.Stdout = &deleteTableStdoutBuf
 			pp.Print(deleteTableCmd + "\n")
 			err = session.Run(deleteTableCmd)
+			if err != nil {
+				pp.Fatal(err)
+			}
+		}(table)
+	}
+	wg.Wait()
+}
+
+func loadInfile(conn *ssh.Client) {
+	var tables []string
+	tables, err := readLines(listTableResultFile)
+	if err != nil {
+		pp.Fatal(err)
+	}
+	pp.Print(tables)
+
+	sem := make(chan int, 3)
+	var wg sync.WaitGroup
+	for _, table := range tables {
+		wg.Add(1)
+		go func(table string) {
+			sem <- 1
+			defer wg.Done()
+			defer func() { <-sem }()
+			session, err := conn.NewSession()
+			if err != nil {
+				panic("Failed to create session: " + err.Error())
+			}
+			defer session.Close()
+			fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+			loadInfileCmd := fmt.Sprintf(LoadInfileSQL, toDBConf.User, toDBConf.Password, fetchedTableFile, toDBConf.Name, table)
+			pp.Print(table + "\n")
+
+			pp.Print(loadInfileCmd + "\n")
+			err = session.Run(loadInfileCmd)
 			if err != nil {
 				pp.Fatal(err)
 			}
