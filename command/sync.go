@@ -262,40 +262,33 @@ func deleteTables(conn *ssh.Client) {
 	}
 	pp.Print(tables)
 
-	// sem := make(chan int, 3)
-	// var wg sync.WaitGroup
+	sem := make(chan int, 3)
+	var wg sync.WaitGroup
 	for _, table := range tables {
-		// wg.Add(1)
-		// go func(table string) {
-		// 	sem <- 1
-		// 	defer wg.Done()
-		// 	defer func() { <-sem }()
-		session, err := conn.NewSession()
-		if err != nil {
-			panic("Failed to create session: " + err.Error())
-		}
-		defer session.Close()
+		wg.Add(1)
+		go func(table string) {
+			sem <- 1
+			defer wg.Done()
+			defer func() { <-sem }()
+			session, err := conn.NewSession()
+			if err != nil {
+				panic("Failed to create session: " + err.Error())
+			}
+			defer session.Close()
 
-		// var offset int
-		// if isnil(toDBConf.Offset) {
-		// 	offset = DefaultOffset
-		// } else {
-		// 	offset = toDBConf.Offset
-		// }
+			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table)
+			pp.Print(table + "\n")
 
-		deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table)
-		pp.Print(table + "\n")
-
-		var deleteTableStdoutBuf bytes.Buffer
-		session.Stdout = &deleteTableStdoutBuf
-		pp.Print(deleteTableCmd + "\n")
-		err = session.Run(deleteTableCmd)
-		if err != nil {
-			pp.Fatal(err)
-		}
-		// }(table)
+			var deleteTableStdoutBuf bytes.Buffer
+			session.Stdout = &deleteTableStdoutBuf
+			pp.Print(deleteTableCmd + "\n")
+			err = session.Run(deleteTableCmd)
+			if err != nil {
+				pp.Fatal(err)
+			}
+		}(table)
 	}
-	// wg.Wait()
+	wg.Wait()
 }
 
 func isnil(x interface{}) bool {
