@@ -262,7 +262,7 @@ func deleteTables(conn *ssh.Client) {
 	}
 	pp.Print(tables)
 
-	sem := make(chan int, 3)
+	sem := make(chan int, 5)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
