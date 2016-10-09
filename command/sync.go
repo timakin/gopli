@@ -62,7 +62,7 @@ const (
 	MaxDeleteSession = 3
 	DefaultOffset    = 1000000000
 	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	LoadInfileSQL    = "mysql -u%s -p%s -B -N -e 'LOAD DATA LOCAL INFILE %s INTO TABLE %s.%s'"
+	LoadInfileSQL    = "mysql -u%s -p%s -B -N -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
 )
 
 // CmdSync supports `sync` command in CLI
