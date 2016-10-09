@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -62,7 +63,8 @@ const (
 	MaxDeleteSession = 3
 	DefaultOffset    = 1000000000
 	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	LoadInfileSQL    = "mysql -u%s -p%s -B -N -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
+	// LoadInfileSQL    = "mysql -u%s -p%s -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
+	LoadInfileSQL = "mysql --enable-local-infile -u%s -p%s -h%s -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -300,31 +302,39 @@ func loadInfile(conn *ssh.Client) {
 	}
 	pp.Print(tables)
 
-	sem := make(chan int, 3)
-	var wg sync.WaitGroup
+	// sem := make(chan int, 3)
+	// var wg sync.WaitGroup
+	m := new(sync.Mutex)
 	for _, table := range tables {
-		wg.Add(1)
-		go func(table string) {
-			sem <- 1
-			defer wg.Done()
-			defer func() { <-sem }()
-			session, err := conn.NewSession()
-			if err != nil {
-				panic("Failed to create session: " + err.Error())
-			}
-			defer session.Close()
-			fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
-			loadInfileCmd := fmt.Sprintf(LoadInfileSQL, toDBConf.User, toDBConf.Password, fetchedTableFile, toDBConf.Name, table)
-			pp.Print(table + "\n")
-
-			pp.Print(loadInfileCmd + "\n")
-			err = session.Run(loadInfileCmd)
-			if err != nil {
-				pp.Fatal(err)
-			}
-		}(table)
+		// wg.Add(1)
+		// go func(table string) {
+		// sem <- 1
+		// 	defer wg.Done()
+		// 	defer func() { <-sem }()
+		// session, err := conn.NewSession()
+		// if err != nil {
+		// 	panic("Failed to create session: " + err.Error())
+		// }
+		// defer session.Close()
+		fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+		loadInfileCmd := fmt.Sprintf(LoadInfileSQL, toDBConf.User, toDBConf.Password, toSSHConf.Host, fetchedTableFile, toDBConf.Name, table)
+		pp.Print(table + "\n")
+		pp.Print(loadInfileCmd)
+		// pp.Print(loadInfileCmd + "\n")
+		m.Lock()
+		err := exec.Command(loadInfileCmd).Run()
+		if err != nil {
+			pp.Fatal(err)
+		}
+		m.Unlock()
 	}
-	wg.Wait()
+	// err = session.Run(loadInfileCmd)
+	// if err != nil {
+	// 	pp.Fatal(err)
+	// }
+	// 	}(table)
+	// }
+	// wg.Wait()
 }
 
 func isnil(x interface{}) bool {
