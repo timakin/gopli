@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	// "database/sql"
+	// "github.com/go-sql-driver/mysql"
 )
 
 var fromDBConf Database
@@ -64,8 +66,9 @@ const (
 	DefaultOffset    = 1000000000
 	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
 	// LoadInfileSQL    = "mysql -u%s -p%s -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
-	LoadInfileQuery   = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
-	LoadInfileSession = "mysql --enable-local-infile -u%s -p%s -h%s -e `%s`"
+	LoadInfileQuery    = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
+	LoadInfileSession  = "mysql -u%s -p%s -h%s"
+	ToHostMysqlConnect = "%s:%s@tcp(%s:%s)/%s"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -306,6 +309,7 @@ func loadInfile(conn *ssh.Client) {
 	// sem := make(chan int, 3)
 	// var wg sync.WaitGroup
 	m := new(sync.Mutex)
+	// db, err := sql.Open("mysql", fmt.Sprintf(ToHostMysqlConnect, toDBConf.User, toDBConf.Password, toSSHConf.Host, toSSHConf.Port, toDBConf.Name))
 	for _, table := range tables {
 		// wg.Add(1)
 		// go func(table string) {
@@ -318,18 +322,26 @@ func loadInfile(conn *ssh.Client) {
 		// }
 		// defer session.Close()
 		fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+		// mysql.RegisterLocalFile(fetchedTableFile)
 		query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, toDBConf.Name, table)
-		loadInfileCmd := fmt.Sprintf(LoadInfileSession, toDBConf.User, toDBConf.Password, toSSHConf.Host, query)
-		pp.Print(loadInfileCmd)
-		loadInfileCmd = strings.Replace(loadInfileCmd, "`", "\"", -1)
+		// mysqlConnection := fmt.Sprintf(LoadInfileSession, toDBConf.User, toDBConf.Password, toSSHConf.Host)
+		// pp.Print(loadInfileCmd)
+		// loadInfileCmd = strings.Replace(loadInfileCmd, "`", "\"", -1)
 
-		pp.Print(loadInfileCmd)
+		// pp.Print(loadInfileCmd)
 		// pp.Print(loadInfileCmd + "\n")
 		m.Lock()
-		err := exec.Command(loadInfileCmd).Run()
+		// query := fmt.Sprintf("LOAD DATA LOCAL INFILE '"+fetchedTableFile+"' INTO TABLE %s", table)
+		// pp.Print(query)
+		// _, err := db.Exec(query)
+		cmd := exec.Command("mysql", "-uroot", "-p", "-h"+toSSHConf.Host, "--enable-local-infile", "--execute="+query)
+		// pp.Print(cmd)
+		pp.Print(table)
+		err := cmd.Run()
 		if err != nil {
 			pp.Fatal(err)
 		}
+
 		m.Unlock()
 	}
 	// err = session.Run(loadInfileCmd)
