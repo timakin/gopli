@@ -2,34 +2,46 @@ Cylinder
 ========
 Database backup between remote hosts (or local) written in Golang.
 
+## Install
+```
+go get -u github.com/timakin/cylinder
+```
+
 ## Usage
 Write down setting file in toml.
 ```
 [database]
-  [database.remotehost1]
+  [database.staging]
   host = "xxx.xxx.xxx.xxx"
   port = 3306
   management_system = "mysql"
-  name = "remotehost1_db"
+  name = "app_staging"
   user = "root"
-  password = "password"
+  password = ""
 
-  [database.remotehost2]
+  [database.production]
   host = "yyy.yyy.yyy.yyy"
   port = 3306
   management_system = "mysql"
-  name = "remotehost2_db"
-  user = "root2"
-  password = "password2"
+  name = "app_production"
+  user = "root"
+  password = ""
 
 [ssh]
-  [ssh.remotehost1]
-  ssh_key = "~/.ssh/id_rsa"
+  [ssh.staging]
+  host = "xxx.xxx.xxx.xxx"
+  port = "22"
+  user = "timakin"
+  key = "~/.ssh/id_rsa_staging"
 
-  [ssh.remotehost2]
-  ssh_key = "~/.ssh/id_rsa"
+  [ssh.production]
+  host = "yyy.yyy.yyy.yyy"
+  port = "22"
+  user = "remoteuser"
+  key = "~/.ssh/id_rsa_prod"
+
 ```
 
 ```
-cylinder sync remotehost1 remotehost2 -c config/cylinder.toml
+cylinder sync -from production -to staging -c config/cylinder.toml
 ```
