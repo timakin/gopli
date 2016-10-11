@@ -57,16 +57,16 @@ var toHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	SelectTablesSQL  = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
-	ShowTableSQL     = "mysql %s -u%s -p%s -B -N -e 'show tables'"
-	MaxFetchSession  = 3
-	MaxDeleteSession = 3
-	DefaultOffset    = 1000000000
-	DeleteTableSQL   = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	// LoadInfileSQL    = "mysql -u%s -p%s -e 'LOAD DATA LOCAL INFILE `%s` INTO TABLE %s.%s'"
-	LoadInfileQuery    = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
-	LoadInfileSession  = "mysql -u%s -p%s -h%s"
-	ToHostMysqlConnect = "%s:%s@tcp(%s:%s)/%s"
+	SelectTablesSQL      = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+	ShowTableSQL         = "mysql %s -u%s -p%s -B -N -e 'show tables'"
+	MaxFetchSession      = 3
+	MaxDeleteSession     = 3
+	MaxLoadInfileSession = 3
+	DefaultOffset        = 1000000000
+	DeleteTableSQL       = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
+	LoadInfileQuery      = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
+	LoadInfileSession    = "mysql -u%s -p%s -h%s"
+	ToHostMysqlConnect   = "%s:%s@tcp(%s:%s)/%s"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -121,6 +121,7 @@ func isInBlackList(table string) bool {
 }
 
 func loadTomlConf(c *cli.Context) {
+	log.Print("[Setting] loading toml configuration...")
 	var tmlconf tomlConfig
 	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
 		pp.Print(err)
@@ -130,6 +131,7 @@ func loadTomlConf(c *cli.Context) {
 	toDBConf = tmlconf.Database[c.String("to")]
 	fromSSHConf = tmlconf.SSH[c.String("from")]
 	toSSHConf = tmlconf.SSH[c.String("to")]
+	log.Print("[Setting] loaded toml configuration")
 }
 
 func loadFromSSHConf() *ssh.ClientConfig {
@@ -165,6 +167,7 @@ func connectToFromHost() {
 }
 
 func fetchTableList(conn *ssh.Client) {
+	log.Print("[Fetch] fetching the list of tables...")
 	session, err := conn.NewSession()
 	if err != nil {
 		panic("Failed to create session: " + err.Error())
@@ -184,9 +187,11 @@ func fetchTableList(conn *ssh.Client) {
 
 	listTableResultFile = loadDirName + "/" + fromDBConf.Name + "_list.txt"
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
+	log.Print("[Fetch] completed fetching the list of tables")
 }
 
 func fetchTables(conn *ssh.Client) {
+	log.Print("\t[Fetch] start to fetch table contents...")
 	var tables []string
 	tables, err := readLines(listTableResultFile)
 	if err != nil {
@@ -210,16 +215,18 @@ func fetchTables(conn *ssh.Client) {
 			var fetchTableStdoutBuf bytes.Buffer
 			session.Stdout = &fetchTableStdoutBuf
 			fetchRowsCmd := fmt.Sprintf(SelectTablesSQL, fromDBConf.User, fromDBConf.Password, fromDBConf.Name, table)
-
+			log.Print("\t\t[Fetch] fetcing " + table)
 			err = session.Run(fetchRowsCmd)
 			if err != nil {
 				pp.Fatal(err)
 			}
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
+			log.Print("\t\t[Fetch] completed fetcing " + table)
 		}(table)
 	}
 	wg.Wait()
+	log.Print("\t[Fetch] completed fetching all tables")
 }
 
 func loadToSSHConf() *ssh.ClientConfig {
@@ -255,6 +262,7 @@ func connectToToHost() {
 }
 
 func deleteTables(conn *ssh.Client) {
+	log.Print("[Delete] deleting existing tables...")
 	var tables []string
 	tables, err := readLines(listTableResultFile)
 	if err != nil {
@@ -278,6 +286,7 @@ func deleteTables(conn *ssh.Client) {
 			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table)
 			var deleteTableStdoutBuf bytes.Buffer
 			session.Stdout = &deleteTableStdoutBuf
+			log.Print("\t[Delete] deleting " + table)
 			err = session.Run(deleteTableCmd)
 			if err != nil {
 				pp.Fatal(err)
@@ -285,15 +294,17 @@ func deleteTables(conn *ssh.Client) {
 		}(table)
 	}
 	wg.Wait()
+	log.Print("[Delete] completed deleting tables")
 }
 
 func loadInfile(conn *ssh.Client) {
+	log.Print("[Load Infile] start to send fetched contents...")
 	var tables []string
 	tables, err := readLines(listTableResultFile)
 	if err != nil {
 		pp.Fatal(err)
 	}
-	sem := make(chan int, 3)
+	sem := make(chan int, MaxLoadInfileSession)
 	var wg sync.WaitGroup
 	for _, table := range tables {
 		wg.Add(1)
@@ -309,14 +320,18 @@ func loadInfile(conn *ssh.Client) {
 			} else {
 				passwordOption = ""
 			}
+			log.Print("\t[Load Infile] start to send the contents inside of " + table)
 			cmd := exec.Command("mysql", "-uroot", passwordOption, "-h"+toSSHConf.Host, "--enable-local-infile", "--execute="+query)
 			err := cmd.Run()
 			if err != nil {
 				pp.Fatal(err)
 			}
+			log.Print("\t[Load Infile] completed sending the contents inside of " + table)
 		}(table)
 		wg.Wait()
 	}
+	log.Print("[Load Infile] completed sending fetched contents")
+	log.Print("[Finished] All tasks finished")
 }
 
 func isnil(x interface{}) bool {
