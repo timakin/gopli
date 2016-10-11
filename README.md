@@ -13,7 +13,6 @@ Write down setting file in toml.
 [database]
   [database.staging]
   host = "xxx.xxx.xxx.xxx"
-  port = 3306
   management_system = "mysql"
   name = "app_staging"
   user = "root"
@@ -21,7 +20,6 @@ Write down setting file in toml.
 
   [database.production]
   host = "yyy.yyy.yyy.yyy"
-  port = 3306
   management_system = "mysql"
   name = "app_production"
   user = "root"

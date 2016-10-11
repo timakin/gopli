@@ -34,7 +34,6 @@ type tomlConfig struct {
 // Database settings
 type Database struct {
 	Host             string
-	Port             int
 	ManagementSystem string
 	Name             string
 	User             string
