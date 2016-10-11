@@ -19,8 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	// "database/sql"
-	// "github.com/go-sql-driver/mysql"
 )
 
 var fromDBConf Database
@@ -125,7 +123,6 @@ func isInBlackList(table string) bool {
 func loadTomlConf(c *cli.Context) {
 	var tmlconf tomlConfig
 	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
-		// TODO: pkg/errors
 		pp.Print(err)
 	}
 
@@ -181,13 +178,11 @@ func fetchTableList(conn *ssh.Client) {
 
 	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	loadDirName = "/tmp/db_sync_" + syncTimestamp
-	pp.Print(loadDirName)
 	if err := os.MkdirAll(loadDirName, 0777); err != nil {
 		pp.Fatal(err)
 	}
 
 	listTableResultFile = loadDirName + "/" + fromDBConf.Name + "_list.txt"
-	pp.Print(listTableResultFile)
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
 }
 
@@ -197,7 +192,6 @@ func fetchTables(conn *ssh.Client) {
 	if err != nil {
 		pp.Fatal(err)
 	}
-	pp.Print(tables)
 
 	sem := make(chan int, MaxFetchSession)
 	var wg sync.WaitGroup
@@ -223,7 +217,6 @@ func fetchTables(conn *ssh.Client) {
 			}
 			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
-			pp.Print(fetchRowsCmd + " was done.\n")
 		}(table)
 	}
 	wg.Wait()
@@ -267,7 +260,6 @@ func deleteTables(conn *ssh.Client) {
 	if err != nil {
 		pp.Fatal(err)
 	}
-	pp.Print(tables)
 
 	sem := make(chan int, 5)
 	var wg sync.WaitGroup
@@ -284,11 +276,8 @@ func deleteTables(conn *ssh.Client) {
 			defer session.Close()
 
 			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table)
-			pp.Print(table + "\n")
-
 			var deleteTableStdoutBuf bytes.Buffer
 			session.Stdout = &deleteTableStdoutBuf
-			pp.Print(deleteTableCmd + "\n")
 			err = session.Run(deleteTableCmd)
 			if err != nil {
 				pp.Fatal(err)
@@ -304,53 +293,30 @@ func loadInfile(conn *ssh.Client) {
 	if err != nil {
 		pp.Fatal(err)
 	}
-	pp.Print(tables)
-
-	// sem := make(chan int, 3)
-	// var wg sync.WaitGroup
-	m := new(sync.Mutex)
-	// db, err := sql.Open("mysql", fmt.Sprintf(ToHostMysqlConnect, toDBConf.User, toDBConf.Password, toSSHConf.Host, toSSHConf.Port, toDBConf.Name))
+	sem := make(chan int, 3)
+	var wg sync.WaitGroup
 	for _, table := range tables {
-		// wg.Add(1)
-		// go func(table string) {
-		// sem <- 1
-		// 	defer wg.Done()
-		// 	defer func() { <-sem }()
-		// session, err := conn.NewSession()
-		// if err != nil {
-		// 	panic("Failed to create session: " + err.Error())
-		// }
-		// defer session.Close()
-		fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
-		// mysql.RegisterLocalFile(fetchedTableFile)
-		query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, toDBConf.Name, table)
-		// mysqlConnection := fmt.Sprintf(LoadInfileSession, toDBConf.User, toDBConf.Password, toSSHConf.Host)
-		// pp.Print(loadInfileCmd)
-		// loadInfileCmd = strings.Replace(loadInfileCmd, "`", "\"", -1)
-
-		// pp.Print(loadInfileCmd)
-		// pp.Print(loadInfileCmd + "\n")
-		m.Lock()
-		// query := fmt.Sprintf("LOAD DATA LOCAL INFILE '"+fetchedTableFile+"' INTO TABLE %s", table)
-		// pp.Print(query)
-		// _, err := db.Exec(query)
-		cmd := exec.Command("mysql", "-uroot", "-p", "-h"+toSSHConf.Host, "--enable-local-infile", "--execute="+query)
-		// pp.Print(cmd)
-		pp.Print(table)
-		err := cmd.Run()
-		if err != nil {
-			pp.Fatal(err)
-		}
-
-		m.Unlock()
+		wg.Add(1)
+		go func(table string) {
+			sem <- 1
+			defer wg.Done()
+			defer func() { <-sem }()
+			fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+			query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, toDBConf.Name, table)
+			var passwordOption string
+			if len(toDBConf.Password) > 0 {
+				passwordOption = "-p"
+			} else {
+				passwordOption = ""
+			}
+			cmd := exec.Command("mysql", "-uroot", passwordOption, "-h"+toSSHConf.Host, "--enable-local-infile", "--execute="+query)
+			err := cmd.Run()
+			if err != nil {
+				pp.Fatal(err)
+			}
+		}(table)
+		wg.Wait()
 	}
-	// err = session.Run(loadInfileCmd)
-	// if err != nil {
-	// 	pp.Fatal(err)
-	// }
-	// 	}(table)
-	// }
-	// wg.Wait()
 }
 
 func isnil(x interface{}) bool {
@@ -360,6 +326,6 @@ func isnil(x interface{}) bool {
 func deleteTmpDir() {
 	err := os.RemoveAll(loadDirName)
 	if err != nil {
-		fmt.Println(err)
+		pp.Print(err)
 	}
 }
