@@ -21,10 +21,10 @@ import (
 	"time"
 )
 
-var fromDBConf Database
-var fromSSHConf SSH
-var toDBConf Database
-var toSSHConf SSH
+var srcDBConf Database
+var srcSSHConf SSH
+var dstDBConf Database
+var dstSSHConf SSH
 
 type tomlConfig struct {
 	Database map[string]Database
@@ -51,8 +51,8 @@ type SSH struct {
 
 var listTableResultFile string
 var loadDirName string
-var fromHostConn *ssh.Client
-var toHostConn *ssh.Client
+var srcHostConn *ssh.Client
+var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
@@ -65,22 +65,22 @@ const (
 	DeleteTableSQL       = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
 	LoadInfileQuery      = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
 	LoadInfileSession    = "mysql -u%s -p%s -h%s"
-	ToHostMysqlConnect   = "%s:%s@tcp(%s:%s)/%s"
+	DstHostMysqlConnect  = "%s:%s@tcp(%s:%s)/%s"
 )
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
 	setupMultiCore()
 	loadTomlConf(c)
-	connectToFromHost()
-	defer fromHostConn.Close()
-	fetchTableList(fromHostConn)
+	connectToSrcHost()
+	defer srcHostConn.Close()
+	fetchTableList(srcHostConn)
 	defer deleteTmpDir()
-	fetchTables(fromHostConn)
-	connectToToHost()
-	defer toHostConn.Close()
-	deleteTables(toHostConn)
-	loadInfile(toHostConn)
+	fetchTables(srcHostConn)
+	connectToDstHost()
+	defer dstHostConn.Close()
+	deleteTables(dstHostConn)
+	loadInfile(dstHostConn)
 }
 
 func setupMultiCore() {
@@ -126,16 +126,16 @@ func loadTomlConf(c *cli.Context) {
 		pp.Print(err)
 	}
 
-	fromDBConf = tmlconf.Database[c.String("from")]
-	toDBConf = tmlconf.Database[c.String("to")]
-	fromSSHConf = tmlconf.SSH[c.String("from")]
-	toSSHConf = tmlconf.SSH[c.String("to")]
+	srcDBConf = tmlconf.Database[c.String("from")]
+	dstDBConf = tmlconf.Database[c.String("to")]
+	srcSSHConf = tmlconf.SSH[c.String("from")]
+	dstSSHConf = tmlconf.SSH[c.String("to")]
 	log.Print("[Setting] loaded toml configuration")
 }
 
-func loadFromSSHConf() *ssh.ClientConfig {
+func loadSrcSSHConf() *ssh.ClientConfig {
 	usr, _ := user.Current()
-	keypathString := strings.Replace(fromSSHConf.Key, "~", usr.HomeDir, 1)
+	keypathString := strings.Replace(srcSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
 	key, err := ioutil.ReadFile(keypath)
 	if err != nil {
@@ -148,7 +148,7 @@ func loadFromSSHConf() *ssh.ClientConfig {
 	}
 
 	config := &ssh.ClientConfig{
-		User: fromSSHConf.User,
+		User: srcSSHConf.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -156,13 +156,13 @@ func loadFromSSHConf() *ssh.ClientConfig {
 	return config
 }
 
-func connectToFromHost() {
-	config := loadFromSSHConf()
-	conn, err := ssh.Dial("tcp", fromSSHConf.Host+":"+fromSSHConf.Port, config)
+func connectToSrcHost() {
+	config := loadSrcSSHConf()
+	conn, err := ssh.Dial("tcp", srcSSHConf.Host+":"+srcSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
 	}
-	fromHostConn = conn
+	srcHostConn = conn
 }
 
 func fetchTableList(conn *ssh.Client) {
@@ -175,7 +175,7 @@ func fetchTableList(conn *ssh.Client) {
 
 	var listTableStdoutBuf bytes.Buffer
 	session.Stdout = &listTableStdoutBuf
-	listTableCmd := fmt.Sprintf(ShowTableSQL, fromDBConf.Name, fromDBConf.User, fromDBConf.Password)
+	listTableCmd := fmt.Sprintf(ShowTableSQL, srcDBConf.Name, srcDBConf.User, srcDBConf.Password)
 	err = session.Run(listTableCmd)
 
 	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
@@ -184,7 +184,7 @@ func fetchTableList(conn *ssh.Client) {
 		pp.Fatal(err)
 	}
 
-	listTableResultFile = loadDirName + "/" + fromDBConf.Name + "_list.txt"
+	listTableResultFile = loadDirName + "/" + srcDBConf.Name + "_list.txt"
 	ioutil.WriteFile(listTableResultFile, listTableStdoutBuf.Bytes(), os.ModePerm)
 	log.Print("[Fetch] completed fetching the list of tables")
 }
@@ -213,13 +213,13 @@ func fetchTables(conn *ssh.Client) {
 
 			var fetchTableStdoutBuf bytes.Buffer
 			session.Stdout = &fetchTableStdoutBuf
-			fetchRowsCmd := fmt.Sprintf(SelectTablesSQL, fromDBConf.User, fromDBConf.Password, fromDBConf.Name, table)
+			fetchRowsCmd := fmt.Sprintf(SelectTablesSQL, srcDBConf.User, srcDBConf.Password, srcDBConf.Name, table)
 			log.Print("\t\t[Fetch] fetcing " + table)
 			err = session.Run(fetchRowsCmd)
 			if err != nil {
 				pp.Fatal(err)
 			}
-			fetchTableRowsResultFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
+			fetchTableRowsResultFile := loadDirName + "/" + srcDBConf.Name + "_" + table + ".txt"
 			ioutil.WriteFile(fetchTableRowsResultFile, fetchTableStdoutBuf.Bytes(), os.ModePerm)
 			log.Print("\t\t[Fetch] completed fetcing " + table)
 		}(table)
@@ -228,9 +228,9 @@ func fetchTables(conn *ssh.Client) {
 	log.Print("\t[Fetch] completed fetching all tables")
 }
 
-func loadToSSHConf() *ssh.ClientConfig {
+func loadDstSSHConf() *ssh.ClientConfig {
 	usr, _ := user.Current()
-	keypathString := strings.Replace(toSSHConf.Key, "~", usr.HomeDir, 1)
+	keypathString := strings.Replace(dstSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
 	key, err := ioutil.ReadFile(keypath)
 	if err != nil {
@@ -243,7 +243,7 @@ func loadToSSHConf() *ssh.ClientConfig {
 	}
 
 	config := &ssh.ClientConfig{
-		User: toSSHConf.User,
+		User: dstSSHConf.User,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -251,13 +251,13 @@ func loadToSSHConf() *ssh.ClientConfig {
 	return config
 }
 
-func connectToToHost() {
-	config := loadToSSHConf()
-	conn, err := ssh.Dial("tcp", toSSHConf.Host+":"+toSSHConf.Port, config)
+func connectToDstHost() {
+	config := loadDstSSHConf()
+	conn, err := ssh.Dial("tcp", dstSSHConf.Host+":"+dstSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
 	}
-	toHostConn = conn
+	dstHostConn = conn
 }
 
 func deleteTables(conn *ssh.Client) {
@@ -282,7 +282,7 @@ func deleteTables(conn *ssh.Client) {
 			}
 			defer session.Close()
 
-			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, toDBConf.User, toDBConf.Password, toDBConf.Name, table)
+			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
 			var deleteTableStdoutBuf bytes.Buffer
 			session.Stdout = &deleteTableStdoutBuf
 			log.Print("\t[Delete] deleting " + table)
@@ -311,16 +311,16 @@ func loadInfile(conn *ssh.Client) {
 			sem <- 1
 			defer wg.Done()
 			defer func() { <-sem }()
-			fetchedTableFile := loadDirName + "/" + fromDBConf.Name + "_" + table + ".txt"
-			query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, toDBConf.Name, table)
+			fetchedTableFile := loadDirName + "/" + srcDBConf.Name + "_" + table + ".txt"
+			query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, dstDBConf.Name, table)
 			var passwordOption string
-			if len(toDBConf.Password) > 0 {
-				passwordOption = fmt.Sprintf("-p%s", toDBConf.Password)
+			if len(dstDBConf.Password) > 0 {
+				passwordOption = fmt.Sprintf("-p%s", dstDBConf.Password)
 			} else {
 				passwordOption = ""
 			}
 			log.Print("\t[Load Infile] start to send the contents inside of " + table)
-			cmd := exec.Command("mysql", "-uroot", passwordOption, "-h"+toSSHConf.Host, "--enable-local-infile", "--execute="+query)
+			cmd := exec.Command("mysql", "-uroot", passwordOption, "-h"+dstSSHConf.Host, "--enable-local-infile", "--execute="+query)
 			err := cmd.Run()
 			if err != nil {
 				pp.Fatal(err)
