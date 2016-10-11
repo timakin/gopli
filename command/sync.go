@@ -315,7 +315,7 @@ func loadInfile(conn *ssh.Client) {
 			query := fmt.Sprintf(LoadInfileQuery, fetchedTableFile, toDBConf.Name, table)
 			var passwordOption string
 			if len(toDBConf.Password) > 0 {
-				passwordOption = "-p"
+				passwordOption = fmt.Sprintf("-p%s", toDBConf.Password)
 			} else {
 				passwordOption = ""
 			}
