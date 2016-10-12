@@ -4,7 +4,7 @@ Database backup between remote hosts (or local) written in Golang.
 
 ## Install
 ```
-go get -u github.com/timakin/cylinder
+go get github.com/timakin/cylinder
 ```
 
 ## Usage
