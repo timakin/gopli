@@ -79,7 +79,9 @@ func CmdSync(c *cli.Context) {
 	defer deleteTmpDir()
 	fetchTables(srcHostConn)
 	connectToDstHost()
-	defer dstHostConn.Close()
+	if dstHostConn != nil {
+		defer dstHostConn.Close()
+	}
 	deleteTables(dstHostConn)
 	loadInfile(dstHostConn)
 }
