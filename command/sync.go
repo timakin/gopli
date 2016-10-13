@@ -62,6 +62,7 @@ const (
 	MaxDeleteSession          = 3
 	MaxLoadInfileSession      = 3
 	DefaultOffset             = 1000000000
+	DeleteTableQuery          = "DELETE FROM %s.%s"
 	DeleteTableSQL            = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
 	DeleteTableWithoutPassSQL = "mysql -u%s -B -N -e 'DELETE FROM %s.%s'"
 	LoadInfileQuery           = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
@@ -287,23 +288,30 @@ func deleteTables(conn *ssh.Client) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			var deleteTableCmd string
-			if len(dstDBConf.Password) > 0 {
-				deleteTableCmd = fmt.Sprintf(DeleteTableWithoutPassSQL, dstDBConf.User, dstDBConf.Name, table)
-			} else {
-				deleteTableCmd = fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
-			}
-			var deleteTableStdoutBuf bytes.Buffer
-
 			log.Print("\t[Delete] deleting " + table)
 
 			if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
-				cmd := exec.Command(deleteTableCmd)
-				err := cmd.Run()
+				var deleteTableCmd *exec.Cmd
+				query := fmt.Sprintf(DeleteTableQuery, dstDBConf.Name, table)
+				if len(dstDBConf.Password) > 0 {
+					deleteTableCmd = exec.Command("mysql", "-u"+dstDBConf.User, "-p"+dstDBConf.Password, "--execute="+query)
+				} else {
+					deleteTableCmd = exec.Command("mysql", "-u"+dstDBConf.User, "--execute="+query)
+				}
+
+				err := deleteTableCmd.Run()
 				if err != nil {
 					pp.Fatal(err)
 				}
 			} else {
+				var deleteTableCmd string
+				if len(dstDBConf.Password) > 0 {
+					deleteTableCmd = fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
+				} else {
+					deleteTableCmd = fmt.Sprintf(DeleteTableWithoutPassSQL, dstDBConf.User, dstDBConf.Name, table)
+				}
+
+				var deleteTableStdoutBuf bytes.Buffer
 				session, err := conn.NewSession()
 				if err != nil {
 					panic("Failed to create session: " + err.Error())
