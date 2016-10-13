@@ -11,6 +11,13 @@ go get github.com/timakin/cylinder
 Write down setting file in toml.
 ```
 [database]
+  [database.local]
+  host = "localhost"
+  management_system = "mysql"
+  name = "app_development"
+  user = "root"
+  password = ""
+
   [database.staging]
   host = "xxx.xxx.xxx.xxx"
   management_system = "mysql"
@@ -26,6 +33,9 @@ Write down setting file in toml.
   password = ""
 
 [ssh]
+  [ssh.local]
+  host = "localhost" # or "127.0.0.1"
+
   [ssh.staging]
   host = "xxx.xxx.xxx.xxx"
   port = "22"
