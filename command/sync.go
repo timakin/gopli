@@ -56,16 +56,17 @@ var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	SelectTablesSQL      = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
-	ShowTableSQL         = "mysql %s -u%s -p%s -B -N -e 'show tables'"
-	MaxFetchSession      = 3
-	MaxDeleteSession     = 3
-	MaxLoadInfileSession = 3
-	DefaultOffset        = 1000000000
-	DeleteTableSQL       = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	LoadInfileQuery      = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
-	LoadInfileSession    = "mysql -u%s -p%s -h%s"
-	DstHostMysqlConnect  = "%s:%s@tcp(%s:%s)/%s"
+	SelectTablesSQL           = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+	ShowTableSQL              = "mysql %s -u%s -p%s -B -N -e 'show tables'"
+	MaxFetchSession           = 3
+	MaxDeleteSession          = 3
+	MaxLoadInfileSession      = 3
+	DefaultOffset             = 1000000000
+	DeleteTableSQL            = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
+	DeleteTableWithoutPassSQL = "mysql -u%s -B -N -e 'DELETE FROM %s.%s'"
+	LoadInfileQuery           = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
+	LoadInfileSession         = "mysql -u%s -p%s -h%s"
+	DstHostMysqlConnect       = "%s:%s@tcp(%s:%s)/%s"
 )
 
 // CmdSync supports `sync` command in CLI
@@ -229,6 +230,9 @@ func fetchTables(conn *ssh.Client) {
 }
 
 func loadDstSSHConf() *ssh.ClientConfig {
+	if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
+		return nil
+	}
 	usr, _ := user.Current()
 	keypathString := strings.Replace(dstSSHConf.Key, "~", usr.HomeDir, 1)
 	keypath, _ := filepath.Abs(keypathString)
@@ -253,6 +257,10 @@ func loadDstSSHConf() *ssh.ClientConfig {
 
 func connectToDstHost() {
 	config := loadDstSSHConf()
+	if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
+		dstHostConn = nil
+		return
+	}
 	conn, err := ssh.Dial("tcp", dstSSHConf.Host+":"+dstSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
@@ -276,19 +284,34 @@ func deleteTables(conn *ssh.Client) {
 			sem <- 1
 			defer wg.Done()
 			defer func() { <-sem }()
-			session, err := conn.NewSession()
-			if err != nil {
-				panic("Failed to create session: " + err.Error())
-			}
-			defer session.Close()
 
-			deleteTableCmd := fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
+			var deleteTableCmd string
+			if len(dstDBConf.Password) > 0 {
+				deleteTableCmd = fmt.Sprintf(DeleteTableWithoutPassSQL, dstDBConf.User, dstDBConf.Name, table)
+			} else {
+				deleteTableCmd = fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
+			}
 			var deleteTableStdoutBuf bytes.Buffer
-			session.Stdout = &deleteTableStdoutBuf
+
 			log.Print("\t[Delete] deleting " + table)
-			err = session.Run(deleteTableCmd)
-			if err != nil {
-				pp.Fatal(err)
+
+			if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
+				cmd := exec.Command(deleteTableCmd)
+				err := cmd.Run()
+				if err != nil {
+					pp.Fatal(err)
+				}
+			} else {
+				session, err := conn.NewSession()
+				if err != nil {
+					panic("Failed to create session: " + err.Error())
+				}
+				defer session.Close()
+				session.Stdout = &deleteTableStdoutBuf
+				err = session.Run(deleteTableCmd)
+				if err != nil {
+					pp.Fatal(err)
+				}
 			}
 		}(table)
 	}
@@ -320,7 +343,12 @@ func loadInfile(conn *ssh.Client) {
 				passwordOption = ""
 			}
 			log.Print("\t[Load Infile] start to send the contents inside of " + table)
-			cmd := exec.Command("mysql", "-uroot", passwordOption, "-h"+dstSSHConf.Host, "--enable-local-infile", "--execute="+query)
+			var cmd *exec.Cmd
+			if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
+				cmd = exec.Command("mysql", "-u"+dstDBConf.User, passwordOption, "--enable-local-infile", "--execute="+query)
+			} else {
+				cmd = exec.Command("mysql", "-u"+dstDBConf.User, passwordOption, "-h"+dstSSHConf.Host, "--enable-local-infile", "--execute="+query)
+			}
 			err := cmd.Run()
 			if err != nil {
 				pp.Fatal(err)
