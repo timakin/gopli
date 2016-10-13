@@ -293,11 +293,15 @@ func deleteTables(conn *ssh.Client) {
 			if dstSSHConf.Host == "localhost" || dstSSHConf.Host == "127.0.0.1" {
 				var deleteTableCmd *exec.Cmd
 				query := fmt.Sprintf(DeleteTableQuery, dstDBConf.Name, table)
+				userOption := "-u" + dstDBConf.User
+				executeOption := "--execute=" + query
+				var passwordOption string
 				if len(dstDBConf.Password) > 0 {
-					deleteTableCmd = exec.Command("mysql", "-u"+dstDBConf.User, "-p"+dstDBConf.Password, "--execute="+query)
+					passwordOption = "-p" + dstDBConf.Password
 				} else {
-					deleteTableCmd = exec.Command("mysql", "-u"+dstDBConf.User, "--execute="+query)
+					passwordOption = ""
 				}
+				deleteTableCmd = exec.Command("mysql", userOption, passwordOption, executeOption)
 
 				err := deleteTableCmd.Run()
 				if err != nil {
