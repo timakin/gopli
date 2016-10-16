@@ -21,6 +21,7 @@ import (
 	"time"
 
 	. "github.com/timakin/cylinder/constants"
+	. "github.com/timakin/cylinder/utils"
 )
 
 var srcDBConf Database
@@ -71,7 +72,7 @@ func CmdSync(c *cli.Context) {
 	connectToSrcHost()
 	defer srcHostConn.Close()
 	fetchTableList(srcHostConn)
-	defer deleteTmpDir()
+	defer DeleteTmpDir(loadDirName)
 	fetchTables(srcHostConn)
 	connectToDstHost()
 	if dstHostConn != nil {
@@ -367,15 +368,4 @@ func loadInfile(conn *ssh.Client) {
 	}
 	log.Print("[Load Infile] completed sending fetched contents")
 	log.Print("[Finished] All tasks finished")
-}
-
-func isnil(x interface{}) bool {
-	return x == nil || x == 0
-}
-
-func deleteTmpDir() {
-	err := os.RemoveAll(loadDirName)
-	if err != nil {
-		pp.Print(err)
-	}
 }
