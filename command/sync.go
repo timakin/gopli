@@ -59,10 +59,7 @@ var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	MaxFetchSession      = 3
-	MaxDeleteSession     = 3
-	MaxLoadInfileSession = 3
-	DefaultOffset        = 1000000000
+	DefaultOffset = 1000000000
 )
 
 // CmdSync supports `sync` command in CLI
