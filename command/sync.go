@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	. "github.com/timakin/cylinder/constants"
 )
 
 var srcDBConf Database
@@ -56,18 +58,10 @@ var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	SelectTablesCmd           = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
-	ShowTableCmd              = "mysql %s -u%s -p%s -B -N -e 'show tables'"
-	MaxFetchSession           = 3
-	MaxDeleteSession          = 3
-	MaxLoadInfileSession      = 3
-	DefaultOffset             = 1000000000
-	DeleteTableQuery          = "DELETE FROM %s.%s"
-	DeleteTableCmd            = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	DeleteTableCmdWithoutPass = "mysql -u%s -B -N -e 'DELETE FROM %s.%s'"
-	LoadInfileQuery           = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
-	MySQLSession              = "mysql -u%s -p%s -h%s"
-	DstHostMysqlConnect       = "%s:%s@tcp(%s:%s)/%s"
+	MaxFetchSession      = 3
+	MaxDeleteSession     = 3
+	MaxLoadInfileSession = 3
+	DefaultOffset        = 1000000000
 )
 
 // CmdSync supports `sync` command in CLI
