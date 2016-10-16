@@ -56,17 +56,17 @@ var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 const (
-	SelectTablesSQL           = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
-	ShowTableSQL              = "mysql %s -u%s -p%s -B -N -e 'show tables'"
+	SelectTablesCmd           = "mysql -u%s -p%s -B -N -e 'SELECT * FROM %s.%s'"
+	ShowTableCmd              = "mysql %s -u%s -p%s -B -N -e 'show tables'"
 	MaxFetchSession           = 3
 	MaxDeleteSession          = 3
 	MaxLoadInfileSession      = 3
 	DefaultOffset             = 1000000000
 	DeleteTableQuery          = "DELETE FROM %s.%s"
-	DeleteTableSQL            = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
-	DeleteTableWithoutPassSQL = "mysql -u%s -B -N -e 'DELETE FROM %s.%s'"
+	DeleteTableCmd            = "mysql -u%s -p%s -B -N -e 'DELETE FROM %s.%s'"
+	DeleteTableCmdWithoutPass = "mysql -u%s -B -N -e 'DELETE FROM %s.%s'"
 	LoadInfileQuery           = "LOAD DATA LOCAL INFILE '%s' INTO TABLE %s.%s"
-	LoadInfileSession         = "mysql -u%s -p%s -h%s"
+	MySQLSession              = "mysql -u%s -p%s -h%s"
 	DstHostMysqlConnect       = "%s:%s@tcp(%s:%s)/%s"
 )
 
@@ -179,7 +179,7 @@ func fetchTableList(conn *ssh.Client) {
 
 	var listTableStdoutBuf bytes.Buffer
 	session.Stdout = &listTableStdoutBuf
-	listTableCmd := fmt.Sprintf(ShowTableSQL, srcDBConf.Name, srcDBConf.User, srcDBConf.Password)
+	listTableCmd := fmt.Sprintf(ShowTableCmd, srcDBConf.Name, srcDBConf.User, srcDBConf.Password)
 	err = session.Run(listTableCmd)
 
 	syncTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
@@ -217,7 +217,7 @@ func fetchTables(conn *ssh.Client) {
 
 			var fetchTableStdoutBuf bytes.Buffer
 			session.Stdout = &fetchTableStdoutBuf
-			fetchRowsCmd := fmt.Sprintf(SelectTablesSQL, srcDBConf.User, srcDBConf.Password, srcDBConf.Name, table)
+			fetchRowsCmd := fmt.Sprintf(SelectTablesCmd, srcDBConf.User, srcDBConf.Password, srcDBConf.Name, table)
 			log.Print("\t\t[Fetch] fetcing " + table)
 			err = session.Run(fetchRowsCmd)
 			if err != nil {
@@ -310,9 +310,9 @@ func deleteTables(conn *ssh.Client) {
 			} else {
 				var deleteTableCmd string
 				if len(dstDBConf.Password) > 0 {
-					deleteTableCmd = fmt.Sprintf(DeleteTableSQL, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
+					deleteTableCmd = fmt.Sprintf(DeleteTableCmd, dstDBConf.User, dstDBConf.Password, dstDBConf.Name, table)
 				} else {
-					deleteTableCmd = fmt.Sprintf(DeleteTableWithoutPassSQL, dstDBConf.User, dstDBConf.Name, table)
+					deleteTableCmd = fmt.Sprintf(DeleteTableCmdWithoutPass, dstDBConf.User, dstDBConf.Name, table)
 				}
 
 				var deleteTableStdoutBuf bytes.Buffer
