@@ -1,4 +1,4 @@
-package: github.com/timakin/cylinder
+package: github.com/timakin/gopli
 import:
 - package: github.com/codegangsta/cli
   version: ^1.18.1

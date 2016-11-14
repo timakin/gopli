@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/timakin/cylinder/constants"
-	. "github.com/timakin/cylinder/utils"
+	. "github.com/timakin/gopli/constants"
+	. "github.com/timakin/gopli/utils"
 )
 
 var srcDBConf Database

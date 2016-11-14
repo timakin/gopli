@@ -1,10 +1,10 @@
-Cylinder
+gopli
 ========
 Database backup between remote hosts (or local) written in Golang.
 
 ## Install
 ```
-go get github.com/timakin/cylinder
+go get github.com/timakin/gopli
 ```
 
 ## Usage
@@ -51,5 +51,5 @@ Write down setting file in toml.
 ```
 
 ```
-cylinder sync -from production -to staging -c config/cylinder.toml
+gopli sync -from production -to staging -c config/gopli.toml
 ```
