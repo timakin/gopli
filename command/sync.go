@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"github.com/codegangsta/cli"
 	"github.com/k0kubun/pp"
 	"golang.org/x/crypto/ssh"
@@ -14,7 +13,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,29 +26,6 @@ var srcDBConf Database
 var srcSSHConf SSH
 var dstDBConf Database
 var dstSSHConf SSH
-
-type tomlConfig struct {
-	Database map[string]Database
-	SSH      map[string]SSH
-}
-
-// Database settings
-type Database struct {
-	Host             string
-	ManagementSystem string
-	Name             string
-	User             string
-	Password         string
-	Offset           int
-}
-
-// SSH settings
-type SSH struct {
-	Host string
-	Port string
-	User string
-	Key  string
-}
 
 var listTableResultFile string
 var loadDirName string
@@ -73,6 +48,14 @@ func CmdSync(c *cli.Context) {
 	}
 	deleteTables(dstHostConn)
 	loadInfile(dstHostConn)
+}
+
+func loadTomlConf(c *cli.Context) {
+	tmlconf := LoadTomlConf(c.String("config"))
+	srcDBConf = tmlconf.Database[c.String("from")]
+	dstDBConf = tmlconf.Database[c.String("to")]
+	srcSSHConf = tmlconf.SSH[c.String("from")]
+	dstSSHConf = tmlconf.SSH[c.String("to")]
 }
 
 func readLines(path string) ([]string, error) {
@@ -100,20 +83,6 @@ func isInBlackList(table string) bool {
 		}
 	}
 	return false
-}
-
-func loadTomlConf(c *cli.Context) {
-	log.Print("[Setting] loading toml configuration...")
-	var tmlconf tomlConfig
-	if _, err := toml.DecodeFile(c.String("config"), &tmlconf); err != nil {
-		pp.Print(err)
-	}
-
-	srcDBConf = tmlconf.Database[c.String("from")]
-	dstDBConf = tmlconf.Database[c.String("to")]
-	srcSSHConf = tmlconf.SSH[c.String("from")]
-	dstSSHConf = tmlconf.SSH[c.String("to")]
-	log.Print("[Setting] loaded toml configuration")
 }
 
 func loadSrcSSHConf() *ssh.ClientConfig {
