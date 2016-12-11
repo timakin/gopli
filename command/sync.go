@@ -1,7 +1,6 @@
 package command
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"github.com/codegangsta/cli"
@@ -31,7 +30,6 @@ var listTableResultFile string
 var loadDirName string
 var srcHostConn *ssh.Client
 var dstHostConn *ssh.Client
-var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
@@ -56,33 +54,6 @@ func loadTomlConf(c *cli.Context) {
 	dstDBConf = tmlconf.Database[c.String("to")]
 	srcSSHConf = tmlconf.SSH[c.String("from")]
 	dstSSHConf = tmlconf.SSH[c.String("to")]
-}
-
-func readLines(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if isInBlackList(scanner.Text()) {
-			continue
-		}
-		lines = append(lines, scanner.Text())
-	}
-	return lines, scanner.Err()
-}
-
-func isInBlackList(table string) bool {
-	for _, blackListElem := range tableBlackList {
-		if blackListElem == table {
-			return true
-		}
-	}
-	return false
 }
 
 func connectToSrcHost() {
@@ -121,7 +92,7 @@ func fetchTableList(conn *ssh.Client) {
 func fetchTables(conn *ssh.Client) {
 	log.Print("\t[Fetch] start to fetch table contents...")
 	var tables []string
-	tables, err := readLines(listTableResultFile)
+	tables, err := ReadLines(listTableResultFile)
 	if err != nil {
 		pp.Fatal(err)
 	}
@@ -199,7 +170,7 @@ func connectToDstHost() {
 func deleteTables(conn *ssh.Client) {
 	log.Print("[Delete] deleting existing tables...")
 	var tables []string
-	tables, err := readLines(listTableResultFile)
+	tables, err := ReadLines(listTableResultFile)
 	if err != nil {
 		pp.Fatal(err)
 	}
@@ -261,7 +232,7 @@ func deleteTables(conn *ssh.Client) {
 func loadInfile(conn *ssh.Client) {
 	log.Print("[Load Infile] start to send fetched contents...")
 	var tables []string
-	tables, err := readLines(listTableResultFile)
+	tables, err := ReadLines(listTableResultFile)
 	if err != nil {
 		pp.Fatal(err)
 	}
