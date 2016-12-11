@@ -21,7 +21,7 @@ import (
 	"time"
 
 	. "github.com/timakin/gopli/constants"
-	. "github.com/timakin/gopli/utils"
+	. "github.com/timakin/gopli/lib"
 )
 
 var srcDBConf Database
