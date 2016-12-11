@@ -58,13 +58,9 @@ var srcHostConn *ssh.Client
 var dstHostConn *ssh.Client
 var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
 
-const (
-	DefaultOffset = 1000000000
-)
-
 // CmdSync supports `sync` command in CLI
 func CmdSync(c *cli.Context) {
-	setupMultiCore()
+	SetupMultiCore()
 	loadTomlConf(c)
 	connectToSrcHost()
 	defer srcHostConn.Close()
@@ -77,15 +73,6 @@ func CmdSync(c *cli.Context) {
 	}
 	deleteTables(dstHostConn)
 	loadInfile(dstHostConn)
-}
-
-func setupMultiCore() {
-	maxProcs := os.Getenv("GOMAXPROCS")
-
-	if maxProcs == "" {
-		cpus := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpus)
-	}
 }
 
 func readLines(path string) ([]string, error) {
