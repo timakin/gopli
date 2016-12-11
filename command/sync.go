@@ -85,31 +85,8 @@ func isInBlackList(table string) bool {
 	return false
 }
 
-func loadSrcSSHConf() *ssh.ClientConfig {
-	usr, _ := user.Current()
-	keypathString := strings.Replace(srcSSHConf.Key, "~", usr.HomeDir, 1)
-	keypath, _ := filepath.Abs(keypathString)
-	key, err := ioutil.ReadFile(keypath)
-	if err != nil {
-		log.Fatalf("unable to read private key: %v", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		log.Fatalf("unable to parse private key: %v", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User: srcSSHConf.User,
-		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
-		},
-	}
-	return config
-}
-
 func connectToSrcHost() {
-	config := loadSrcSSHConf()
+	config := LoadSrcSSHConf(srcSSHConf.User, srcSSHConf.Key)
 	conn, err := ssh.Dial("tcp", srcSSHConf.Host+":"+srcSSHConf.Port, config)
 	if err != nil {
 		panic("Failed to dial: " + err.Error())
