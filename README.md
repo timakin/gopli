@@ -2,6 +2,10 @@ gopli
 ========
 Database backup between remote hosts (or local) written in Golang.
 
+# Notice
+Currently MySQL only.
+But it will adapt to other management systems like postgresql etc...
+
 ## Install
 ```
 go get github.com/timakin/gopli
