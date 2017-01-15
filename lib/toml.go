@@ -13,9 +13,8 @@ type tomlConfig struct {
 	SSH      map[string]SSH
 }
 
-func LoadTomlConf(configPath string) tomlConfig {
+func LoadTomlConf(configPath string) (tmlconf tomlConfig) {
 	log.Print("[Setting] loading toml configuration...")
-	var tmlconf tomlConfig
 	if _, err := toml.DecodeFile(configPath, &tmlconf); err != nil {
 		pp.Print(err)
 	}

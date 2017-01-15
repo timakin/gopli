@@ -3,7 +3,7 @@ package constants
 // Database settings
 type Database struct {
 	Host             string
-	ManagementSystem string
+	ManagementSystem string `toml:"management_system"`
 	Name             string
 	User             string
 	Password         string
