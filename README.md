@@ -2,6 +2,17 @@ gopli
 ========
 Database backup between remote hosts (or local) written in Golang.
 
+## Feature
+
+- High-speed parallel data fetching with goroutine concurrency
+- Reuse options of connection with TOML configuration
+- Gopli will release you from an annoying replication setting
+
+# TODO
+- [ ] Currently MySQL only. so adopt to other management systems
+- [ ] Data mask for password, credit-card number, etc...
+- [ ] Response packet regulation and compression for fetched data
+
 ## Install
 ```
 go get github.com/timakin/gopli
