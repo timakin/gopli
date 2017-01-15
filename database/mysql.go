@@ -95,38 +95,48 @@ func (inserter *MySQLInserter) Clean() error {
 			log.Print("\t[Delete] deleting " + table)
 
 			if inserter.Host == "localhost" || inserter.Host == "127.0.0.1" {
-				var CLEAN_TABLES_CMD_FORMAT *exec.Cmd
+				var cleanTablesCmd *exec.Cmd
 				query := fmt.Sprintf(DELETE_TABLE_QUERY_FORMAT, inserter.Name, table)
 				userOption := "-u" + inserter.User
 				executeOption := "--execute=" + query
+				hostOption := "-h" + inserter.Host
 				var passwordOption string
-				if len(inserter.Password) > 0 {
-					passwordOption = "-p" + inserter.Password
-				} else {
-					passwordOption = ""
-				}
-				CLEAN_TABLES_CMD_FORMAT = exec.Command("mysql", userOption, passwordOption, executeOption)
 
-				err := CLEAN_TABLES_CMD_FORMAT.Run()
+				if inserter.IsContainer {
+					cleanTablesCmd = exec.Command("mysql", userOption, hostOption, executeOption)
+				} else {
+					cleanTablesCmd = exec.Command("mysql", userOption, executeOption)
+				}
+
+				if len(inserter.Password) > 0 {
+					passwordOption = "MYSQL_PWD=" + inserter.Password
+					cleanTablesCmd.Env = append(os.Environ(), passwordOption)
+				}
+				var stderr bytes.Buffer
+				cleanTablesCmd.Stderr = &stderr
+				err := cleanTablesCmd.Run()
+
 				if err != nil {
+					fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
 					panic(err)
 				}
 			} else {
-				var CLEAN_TABLES_CMD_FORMAT string
+				var cleanTablesCmd string
 				if len(inserter.Password) > 0 {
-					CLEAN_TABLES_CMD_FORMAT = fmt.Sprintf(CLEAN_TABLES_CMD_FORMAT, inserter.User, inserter.Password, inserter.Name, table)
+					cleanTablesCmd = fmt.Sprintf(CLEAN_TABLES_CMD_FORMAT, inserter.User, inserter.Password, inserter.Name, table)
 				} else {
-					CLEAN_TABLES_CMD_FORMAT = fmt.Sprintf(CLEAN_TABLES_CMD_FORMAT_WITHOUT_PASSPHRASE, inserter.User, inserter.Name, table)
+					cleanTablesCmd = fmt.Sprintf(CLEAN_TABLES_CMD_FORMAT_WITHOUT_PASSPHRASE, inserter.User, inserter.Name, table)
 				}
 
 				var CleantdoutBuf bytes.Buffer
+
 				session, err := inserter.SSHClient.NewSession()
 				if err != nil {
 					panic(err)
 				}
 				defer session.Close()
 				session.Stdout = &CleantdoutBuf
-				err = session.Run(CLEAN_TABLES_CMD_FORMAT)
+				err = session.Run(cleanTablesCmd)
 				if err != nil {
 					panic(err)
 				}
@@ -156,21 +166,35 @@ func (inserter *MySQLInserter) Insert() error {
 			defer func() { <-sem }()
 			fetchedTableFile := TMP_DIR_PATH + "/" + table + ".txt"
 			query := fmt.Sprintf(LOAD_INFILE_QUERY_FORMAT, fetchedTableFile, inserter.Name, table)
-			var passwordOption string
-			if len(inserter.Password) > 0 {
-				passwordOption = fmt.Sprintf("-p%s", inserter.Password)
-			} else {
-				passwordOption = ""
-			}
+
 			log.Print("\t[Load Infile] start to send the contents inside of " + table)
 			var cmd *exec.Cmd
 			if inserter.Host == "localhost" || inserter.Host == "127.0.0.1" {
-				cmd = exec.Command("mysql", "-u"+inserter.User, passwordOption, "--enable-local-infile", "--execute="+query)
+				if inserter.IsContainer {
+					hostOption := "-h" + inserter.Host
+					cmd = exec.Command("mysql", "-u"+inserter.User, hostOption, "--enable-local-infile", "--execute="+query)
+				} else {
+					cmd = exec.Command("mysql", "-u"+inserter.User, "--enable-local-infile", "--execute="+query)
+				}
+
+				if len(inserter.Password) > 0 {
+					passwordOption := "MYSQL_PWD=" + inserter.Password
+					cmd.Env = append(os.Environ(), passwordOption)
+				}
 			} else {
+				var passwordOption string
+				if len(inserter.Password) > 0 {
+					passwordOption = fmt.Sprintf("-p%s", inserter.Password)
+				} else {
+					passwordOption = ""
+				}
 				cmd = exec.Command("mysql", "-u"+inserter.User, passwordOption, "-h"+inserter.Host, "--enable-local-infile", "--execute="+query)
 			}
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
 			err := cmd.Run()
 			if err != nil {
+				fmt.Println(fmt.Sprint(err) + ": " + stderr.String())
 				panic(err)
 			}
 			log.Print("\t[Load Infile] completed sending the contents inside of " + table)

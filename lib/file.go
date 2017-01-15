@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-var tableBlackList = [3]string{"schema_migrations", "repli_chk", "repli_clock"}
+var tableBlackList = [4]string{"ar_internal_metadata", "schema_migrations", "repli_chk", "repli_clock"}
 
 func isInBlackList(table string) bool {
 	for _, blackListElem := range tableBlackList {

@@ -8,6 +8,7 @@ type Database struct {
 	User             string
 	Password         string
 	Offset           int
+	IsContainer      bool `toml:"is_container"`
 }
 
 // SSH settings

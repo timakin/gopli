@@ -26,25 +26,26 @@ type DBConnector struct {
 	Name             string
 	User             string
 	Password         string
+	IsContainer      bool
 }
 
 func CreateFetcher(dbConf Database, sshConf SSH) (fetcher DBFetcher, err error) {
 	// Connect to the host of the data soruce.
 	config := LoadSrcSSHConf(sshConf.User, sshConf.Key)
-	conn, err := ssh.Dial("tcp", sshConf.Host+":"+sshConf.Port, config)
+	srcHostConn, err := ssh.Dial("tcp", sshConf.Host+":"+sshConf.Port, config)
 	if err != nil {
 		return nil, err
 	}
-	srcHostConn := conn
 
 	switch dbConf.ManagementSystem {
 	case "mysql":
 		return &MySQLFetcher{
-			SSHClient: srcHostConn,
-			Host:      dbConf.Host,
-			Name:      dbConf.Name,
-			User:      dbConf.User,
-			Password:  dbConf.Password,
+			SSHClient:   srcHostConn,
+			Host:        dbConf.Host,
+			Name:        dbConf.Name,
+			User:        dbConf.User,
+			Password:    dbConf.Password,
+			IsContainer: dbConf.IsContainer,
 		}, nil
 	default:
 		return nil, nil
@@ -69,11 +70,12 @@ func CreateInserter(dbConf Database, sshConf SSH) (inserter DBInserter, err erro
 	switch dbConf.ManagementSystem {
 	case "mysql":
 		return &MySQLInserter{
-			SSHClient: dstHostConn,
-			Host:      dbConf.Host,
-			Name:      dbConf.Name,
-			User:      dbConf.User,
-			Password:  dbConf.Password,
+			SSHClient:   dstHostConn,
+			Host:        dbConf.Host,
+			Name:        dbConf.Name,
+			User:        dbConf.User,
+			Password:    dbConf.Password,
+			IsContainer: dbConf.IsContainer,
 		}, nil
 	default:
 		return nil, nil
